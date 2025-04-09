@@ -3,6 +3,7 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const { OAuth2Client } = require("google-auth-library");
 const client = new OAuth2Client();
+const tokenBlacklist = [];
 
 exports.googleSignup = async (req, res) => {
     const { token } = req.body;
@@ -109,4 +110,56 @@ exports.login = (req, res) => {
         res.status(500).json({ message: "Server error." });
     }
 };
+
+
+
+
+exports.getProfile = (req, res) => {
+    const authHeader = req.headers.authorization;
+
+    if (!authHeader) {
+        return res.status(401).json({ message: "Authorization token missing" });
+    }
+
+    const token = authHeader.split(" ")[1];
+
+    try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        const userId = parseInt(req.params.id);
+
+        // Check if decoded token's ID matches the requested profile ID
+        if (decoded.id !== userId) {
+            return res.status(403).json({ message: "Unauthorized access to this profile" });
+        }
+
+        db.query("SELECT id, full_name, email FROM users WHERE id = ?", [userId], (err, result) => {
+            if (err) return res.status(500).json({ message: "Database error" });
+
+            if (result.length === 0) {
+                return res.status(404).json({ message: "User not found" });
+            }
+
+            return res.status(200).json({ user: result[0] });
+        });
+    } catch (error) {
+        return res.status(401).json({ message: "Invalid or expired token" });
+    }
+};
+
+
+exports.logout = (req, res) => {
+    const token = req.header("Authorization");
+
+    if (!token) {
+        return res.status(400).json({ message: "No token provided." });
+    }
+
+    const cleanedToken = token.replace("Bearer ", "");
+
+    // Add token to blacklist
+    tokenBlacklist.push(cleanedToken);
+
+    res.status(200).json({ message: "Logged out successfully." });
+};
+
 

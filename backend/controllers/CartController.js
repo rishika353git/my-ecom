@@ -1,6 +1,11 @@
 const db = require("../config/db");
 
 exports.addToCart = (req, res) => {
+    // Check if user is authenticated
+    if (!req.user || !req.user.id) {
+        return res.status(401).json({ message: "Please login first" });
+    }
+
     const { product_code, name, price, original_price, quantity, color, size, image } = req.body;
     const user_id = req.user.id; // Extracted from JWT
     const subtotal = price * quantity; // Calculate subtotal
@@ -9,10 +14,14 @@ exports.addToCart = (req, res) => {
         return res.status(400).json({ message: "All required fields must be provided." });
     }
 
-    const query = `INSERT INTO cart (user_id, product_code, name, price, original_price, quantity, color, size, image, subtotal) 
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                   ON DUPLICATE KEY UPDATE quantity = quantity + VALUES(quantity), subtotal = price * quantity`;
-    
+    const query = `
+        INSERT INTO cart (user_id, product_code, name, price, original_price, quantity, color, size, image, subtotal) 
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE 
+            quantity = quantity + VALUES(quantity), 
+            subtotal = price * (quantity + VALUES(quantity))
+    `;
+
     db.query(query, [user_id, product_code, name, price, original_price, quantity, color, size, image, subtotal], (err, result) => {
         if (err) {
             return res.status(500).json({ message: "Database error", error: err });
@@ -20,6 +29,7 @@ exports.addToCart = (req, res) => {
         res.status(201).json({ message: "Item added to cart successfully!" });
     });
 };
+
 
 exports.removeFromCartById = (req, res) => {
     const { id } = req.params;
